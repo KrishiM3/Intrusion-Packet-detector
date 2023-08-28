@@ -1,0 +1,40 @@
+Report:
+As presented in the specification of this coursework we are given two multithreading methods, the One Thread per X Model and the Threadpool Model.
+The Threadpool model was decided to be the model of the mutlithreading in the solution provided. This is done by firstly declaring an array of type pthread_t
+to hold all of our threads. we then create all the threads after initialising our array with dispatch being the handler function. Our handler function continuously 
+checks if there is any more work to be done and thus allocates the work to each thread. The work is obtained from a queue data structure which is thread safe by mutex locks in sniff.c when
+data is enqueued onto it via pcap_loops handler function.When a new packet is enqueued , a broadcast is sent out so a thread can break the pthread_cond_wait to grab the mutex lock to thus
+dequeue the packet for processing. At the end, when Cntrl + C is pressed, the threads must rejoin to prevent orphaned threads which is done by breaking our while loop 
+and terminating any other thread stuck in a pthread_cond_wait by giving a broadcast to the respective condition variable.
+The threadpool design decision was decided due to the following reasons:
+-this model is much better in bursty or heavy traffic due to the need of dynamically creating threads being remove, avoiding thrashing.
+    -- this is particularly important as if there is an SYN flooding attack, this involves large amounts of packets to be flooded
+        to the server, by dynamically creating threads ontop of this can inturn result in the memory of the server to possibly be completely expended, a threadpool mitigates this
+    A server is typically under load constantly with occasional bursty behaivour thus the threadpool model seems to be the better model.
+
+Testing:
+Testing was particularly important as it decided the optimal amount of threads to use in our thread pool, too many threads results in wasted memory if the speed of processing all packets decreases minimally
+Therefore to test our thread pool we flooded our server with 250,000 SYN packets , a relatively large amount. It was discovered that when a low amount of threads were being used , 1 - 4, we would receive incorrect 
+results, possibly due to the fact all our memory is expended as our queue may have become too large, thus a too few amount. 5 upward was deduced as an amount of threads the thread pool
+needed to consist of in order to not produce incorrect results. We incorporated a timer, using the <time.h> library and timed the amount of time it would take for 250,000 syn packets to be detected.
+For 5 threads we had an average time of 80
+For 100 threads we had an average time of 79 
+For 300 threads we had an average time of 81
+Thus by these results its clear that the increase in amount of threads from 5 upwards is minimal in the speed of which the incoming packets are processed in
+As a result we selected 16 threads for our thread pool to contain, this is because if the amount of packets were to become higher it is likely that 5 threads would not produce the correct result
+as the queue would fill up to a large amount, affecting our memory. However in the case this does not happen we do not need an excessively high amount of threads as the speed does not increase and this is superfluous .
+a general trend is to double the amount of cores the machine has for the amount of threads and thus 16 is picked, due to the fact servers should have at least 8 cores (https://community.fs.com/blog/what-is-a-server-cpu.html)
+The code for this testing is provided below:
+ ~~inside our SYN packet processing before and after incrementing our syncounter:
+  //FOR TESTING
+    // if (syncounter == 0){
+    //   start=clock();
+    // }
+
+    syncounter++;
+
+    //FOR TESTING
+    // if (syncounter == 245000){
+    //   difference = clock() - start;
+    //   printf("Time Elapsed %ld\n", (difference/CLOCKS_PER_SEC));
+    // }
